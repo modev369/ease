@@ -1,37 +1,35 @@
-import express from 'express';
-import cors from 'cors';
-import morgan from 'morgan';
-import connectDB from './config/database';
-import authRoutes from './routes/authRoutes';
-import { errorHandler } from './middleware/errorHandler';
-import { logger, morganStream } from './utils/logger';
+import express, { Application, Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import path from 'path';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
 
-// Load environment variables from .env file in the root directory
-dotenv.config({ 
-    path: path.resolve(__dirname, '../.env') 
-  });
-  
-const app = express();
-const PORT = process.env.PORT || 5000;
+// Remove unused import
+// import User from './models/User';
 
-// Connect to Database
-connectDB();
+// Import routes
+import authRoutes from './routes/authRoutes';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Load environment variables
+dotenv.config();
 
-// Logging middleware
-app.use(morgan('combined', { stream: morganStream }));
+class App {
+  public app: Application;
 
-// Routes
-app.use('/api/auth', authRoutes);
+  constructor() {
+    this.app = express();
+    this.connectToDatabase();
+    this.initializeMiddlewares();
+    this.initializeRoutes();
+    this.initializeErrorHandling();
+  }
 
-// Error Handling (must be last)
-app.use(errorHandler);
+  // ... rest of the code remains the same
+}
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-});
+// Create and start the application
+const app = new App();
+app.startServer(parseInt(process.env.PORT || '3000'));
+
+export default app;

@@ -1,110 +1,93 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
-import { AuthService } from '../services/authService';
+import User from '@models/User';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { validationResult } from 'express-validator';
 
-class AuthController {
-  private authService: AuthService;
-
-  constructor(authService: AuthService) {
-    this.authService = authService;
-  }
-
-  // Login method
-  async login(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { email, password } = req.body;
-      const result = await this.authService.login(email, password);
-      
-      if (result.success) {
-        res.status(200).json({
-          message: 'Login successful',
-          token: result.token
-        });
-      } else {
-        res.status(401).json({
-          message: 'Invalid credentials'
-        });
-      }
-    } catch (error) {
-      logger.error('Login error', error);
-      next(error);
+export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
     }
-  }
 
-  // Register method
-  async register(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userData = req.body;
-      const result = await this.authService.register(userData);
-      
-      if (result.success) {
-        res.status(201).json({
-          message: 'Registration successful',
-          userId: result.userId
-        });
-      } else {
-        res.status(400).json({
-          message: 'Registration failed',
-          errors: result.errors
-        });
-      }
-    } catch (error) {
-      logger.error('Registration error', error);
-      next(error);
+    const { username, email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      res.status(400).json({ message: 'User already exists' });
+      return;
     }
-  }
 
-  // Reset Password method
-  async resetPassword(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { email, newPassword } = req.body;
-      const result = await this.authService.resetPassword(email, newPassword);
-      
-      if (result.success) {
-        res.status(200).json({
-          message: 'Password reset successful'
-        });
-      } else {
-        res.status(400).json({
-          message: 'Password reset failed',
-          errors: result.errors
-        });
-      }
-    } catch (error) {
-      logger.error('Password reset error', error);
-      next(error);
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const newUser = new User({
+      username,
+      email,
+      password: hashedPassword
+    });
+
+    await newUser.save();
+
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: newUser._id },
+      process.env.JWT_SECRET || '',
+      { expiresIn: '1h' }
+    );
+
+    res.status(201).json({ 
+      message: 'User registered successfully', 
+      token,
+      userId: newUser._id 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
     }
-  }
 
-  // Verify Token method
-  async verifyToken(req: Request, res: Response, next: NextFunction) {
-    try {
-      const token = req.headers.authorization?.split(' ')[1];
-      
-      if (!token) {
-        return res.status(401).json({
-          message: 'No token provided'
-        });
-      }
+    const { email, password } = req.body;
 
-      const result = await this.authService.verifyToken(token);
-      
-      if (result.valid) {
-        res.status(200).json({
-          message: 'Token is valid',
-          user: result.user
-        });
-      } else {
-        res.status(401).json({
-          message: 'Invalid or expired token'
-        });
-      }
-    } catch (error) {
-      logger.error('Token verification error', error);
-      next(error);
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(400).json({ message: 'Invalid credentials' });
+      return;
     }
-  }
-}
 
-// Create and export an instance with dependency injection
-export default new AuthController(new AuthService());
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      res.status(400).json({ message: 'Invalid credentials' });
+      return;
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || '',
+      { expiresIn: '1h' }
+    );
+
+    res.status(200).json({ 
+      message: 'Login successful', 
+      token,
+      userId: user._id 
+    });
+  } catch (error) {
+    next(error);
+  }
+};

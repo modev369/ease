@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "morgan": "^1.10.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/morgan": "^1.9.9",
+    "@types/winston": "^2.4.4"
+  }
+}
